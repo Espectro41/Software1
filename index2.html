@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Búsqueda Manual de Código de Barras</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    background: linear-gradient(135deg, #4a90e2, #50e3c2);
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 350px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  header {
+    padding: 15px;
+    text-align: center;
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-weight: 700;
+    font-size: 1.5rem;
+  }
+  main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    background: white;
+    border-radius: 12px;
+    margin: 10px 10px 20px 10px;
+    overflow-y: auto;
+  }
+  button {
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.25s ease;
+    margin: 10px 0;
+  }
+  button:hover, button:focus {
+    background-color: #357ABD;
+    outline: none;
+  }
+  input[type="file"], input[type="text"] {
+    margin: 10px 0 20px 0;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    padding: 12px;
+    font-size: 1.1rem;
+    width: 100%;
+  }
+  #result {
+    margin-top: 15px;
+    padding: 12px;
+    background-color: #f0f8ff;
+    border-radius: 8px;
+    min-height: 60px;
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: #222;
+  }
+  footer {
+    text-align: center;
+    font-size: 0.8rem;
+    color: white;
+    padding: 10px 0;
+    background-color: rgba(0,0,0,0.1);
+  }
+</style>
+</head>
+<body>
+<header>Búsqueda Manual de Código de Barras</header>
+<main>
+  <label for="fileInput">Carga el archivo Excel (.xlsx) con los registros:</label>
+  <input type="file" id="fileInput" accept=".xlsx" />
+
+  <label for="manualInput">Ingresa el código manualmente o con lector externo:</label>
+  <input type="text" id="manualInput" placeholder="Escribe o pega el código aquí" autocomplete="off" disabled/>
+
+  <button id="manualSearchBtn" disabled>Buscar Código</button>
+
+  <div id="result">Carga un archivo Excel para activar la búsqueda.</div>
+</main>
+<footer>
+  &copy; 2024 Escáner App - Hecho para Android
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script>
+  (function(){
+    const fileInput = document.getElementById('fileInput');
+    const manualInput = document.getElementById('manualInput');
+    const manualSearchBtn = document.getElementById('manualSearchBtn');
+    const resultDiv = document.getElementById('result');
+
+    let records = [];
+
+    fileInput.addEventListener('change', e => {
+      if(e.target.files.length === 0){
+        alert('Por favor selecciona un archivo Excel válido.');
+        manualInput.disabled = true;
+        manualSearchBtn.disabled = true;
+        return;
+      }
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const data = new Uint8Array(event.target.result);
+          const workbook = XLSX.read(data, {type: 'array'});
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          records = XLSX.utils.sheet_to_json(worksheet);
+          if(records.length > 0){
+            manualInput.disabled = false;
+            manualSearchBtn.disabled = false;
+            resultDiv.textContent = 'Archivo cargado. Ingresa o escanea un código para buscar.';
+          } else {
+            resultDiv.textContent = 'El archivo está vacío o no se pudo leer.';
+            manualInput.disabled = true;
+            manualSearchBtn.disabled = true;
+          }
+        } catch(err) {
+          resultDiv.textContent = 'Error al leer el archivo Excel.';
+          console.error(err);
+          manualInput.disabled = true;
+          manualSearchBtn.disabled = true;
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    manualSearchBtn.addEventListener('click', () => {
+      const code = manualInput.value.trim();
+      if(!code){
+        alert('Por favor ingresa un código para buscar.');
+        return;
+      }
+      resultDiv.textContent = `Buscando el código: ${code}`;
+      searchRecordsAndOpenWindow(code);
+    });
+
+    function searchRecordsAndOpenWindow(code) {
+      if(records.length === 0){
+        alert('No hay datos cargados para buscar.');
+        return;
+      }
+      const lowerCode = code.toLowerCase();
+      const foundRecords = records.filter(record => {
+        return Object.values(record).some(val => {
+          if(typeof val === 'string' || typeof val === 'number') {
+            return val.toString().toLowerCase().includes(lowerCode);
+          }
+          return false;
+        });
+      });
+
+      const newWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
+      newWindow.document.write(`<html><head><title>Resultados de búsqueda</title><style>
+        body { font-family: 'Roboto', sans-serif; background: #e1f5fe; padding: 20px; color: #222; }
+        .record { border-bottom: 1px solid #bbdefb; padding: 12px 0; }
+        .record:last-child { border-bottom: none; }
+        .label { font-weight: 700; color: #1565c0; font-size: 1.1rem; }
+        h1 { color: #4a90e2; font-size: 1.5rem; }
+      </style></head><body>`);
+      
+      newWindow.document.write(`<h1>Resultados de búsqueda para: ${code}</h1>`);
+      
+      if(foundRecords.length === 0){
+        newWindow.document.write('<p><strong>No se encontraron registros para el código.</strong></p>');
+      } else {
+        foundRecords.forEach((rec, idx) => {
+          newWindow.document.write('<div class="record">');
+          newWindow.document.write(`<div><span class="label">Registro ${idx + 1}:</span></div>`);
+          for(const [key, value] of Object.entries(rec)){
+            newWindow.document.write(`<div><span class="label">${key}:</span> ${value}</div>`);
+          }
+          newWindow.document.write('</div>');
+        });
+      }
+      newWindow.document.write('</body></html>');
+      newWindow.document.close();
+    }
+  })();
+</script>
+
+</body>
+</html>
